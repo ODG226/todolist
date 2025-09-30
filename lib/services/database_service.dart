@@ -49,5 +49,5 @@ class DatabaseService {
     await dbClient.delete('notes', where: 'id = ?', whereArgs: [id]);
   }
 
-  static logout() {}
+  static void logout() {}
 }
