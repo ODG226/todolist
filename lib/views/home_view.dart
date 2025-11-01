@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'package:notes_app/models/rappel.dart';
 import '../models/note.dart';
 import '../services/database_service.dart';
 import 'add_edit_note_view.dart';
@@ -104,8 +105,8 @@ class _HomeViewState extends State<HomeView> {
             ListTile(
               leading: const Icon(Icons.notifications, color: Colors.white),
               title: const Text('Rappels', style: TextStyle(color: Colors.white)),
-              onTap: () {},
-            ),
+              onTap: () => Navigator.pop(Rappels)
+              ),
             ListTile(
               leading: const Icon(Icons.label, color: Colors.white),
               title: const Text('Créer un label', style: TextStyle(color: Colors.white)),
