@@ -1,0 +1,191 @@
+import 'package:flutter/material.dart';
+import '../models/note.dart';
+import '../services/database_service.dart';
+import 'add_edit_note_view.dart';
+
+class RappelView extends StatefulWidget {
+  const RappelView({super.key});
+
+  @override
+  State<RappelView> createState() => _RappelViewState();
+}
+
+class _RappelViewState extends State<RappelView> {
+  List<Note> _notes = [];
+  // Local in-memory reminders mapped by note id. Persist as needed in your DatabaseService.
+  final Map<int, DateTime> _reminders = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotes();
+  }
+
+  Future<void> _loadNotes() async {
+    final notes = await DatabaseService.getNotes();
+    notes.sort((a, b) => b.date.compareTo(a.date));
+    setState(() {
+      _notes = notes;
+      // If you have reminder data persisted in notes, initialize _reminders here.
+      // Example if Note had `reminder` field:
+      // for (final n in notes) if (n.reminder != null) _reminders[n.id!] = n.reminder!;
+    });
+  }
+
+  void _goToEditNote(Note note) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => AddEditNoteView(note: note)));
+    await _loadNotes();
+  }
+
+  Future<void> _pickDateTimeForNote(Note note) async {
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: now,
+      lastDate: DateTime(now.year + 10),
+    );
+    if (pickedDate == null) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: now.hour, minute: now.minute),
+    );
+    if (pickedTime == null) return;
+
+    final dt = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+
+    setState(() {
+      _reminders[note.id!] = dt;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Rappel ajouté pour "${note.title}" le ${_formatDateTime(dt)}')),
+    );
+
+    // Optional: persist reminder using your DatabaseService.
+    // e.g. await DatabaseService.setReminder(note.id!, dt);
+  }
+
+  String _formatDateTime(DateTime dt) {
+    final two = (int n) => n.toString().padLeft(2, '0');
+    return '${two(dt.day)}/${two(dt.month)}/${dt.year} ${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  void _removeReminder(int noteId) {
+    setState(() {
+      _reminders.remove(noteId);
+    });
+    // Optional: remove persisted reminder from DatabaseService.
+    // e.g. await DatabaseService.removeReminder(noteId);
+  }
+
+  void _openPickNoteSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(
+                title: Text('Choisir une note pour ajouter un rappel'),
+              ),
+              Divider(height: 1),
+              SizedBox(
+                height: 320,
+                child: ListView.builder(
+                  itemCount: _notes.length,
+                  itemBuilder: (_, i) {
+                    final note = _notes[i];
+                    return ListTile(
+                      title: Text(note.title),
+                      subtitle: note.content.isNotEmpty ? Text(
+                        note.content,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ) : null,
+                      onTap: () {
+                        Navigator.pop(context);
+                        _pickDateTimeForNote(note);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reminderEntries = _reminders.entries.toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Rappels'),
+      ),
+      body: reminderEntries.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Aucun rappel', style: TextStyle(fontSize: 18)),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: _openPickNoteSheet,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Ajouter un rappel'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(8),
+              itemCount: reminderEntries.length,
+              separatorBuilder: (_, __) => const Divider(),
+              itemBuilder: (_, i) {
+                final entry = reminderEntries[i];
+                final noteId = entry.key;
+                final dt = entry.value;
+                final note = _notes.firstWhere((n) => n.id == noteId, orElse: () => Note(id: noteId, title: 'Note supprimée', content: '', date: DateTime.now()));
+                return ListTile(
+                  leading: const Icon(Icons.notifications, color: Colors.orange),
+                  title: Text(note.title),
+                  subtitle: Text(_formatDateTime(dt)),
+                  onTap: () => _goToEditNote(note),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit),
+                        onPressed: () => _pickDateTimeForNote(note),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.redAccent),
+                        onPressed: () => _removeReminder(noteId),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openPickNoteSheet,
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}

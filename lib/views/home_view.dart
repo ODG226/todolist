@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
-import 'package:notes_app/models/rappel.dart';
 import '../models/note.dart';
 import '../services/database_service.dart';
 import 'add_edit_note_view.dart';
@@ -105,8 +104,11 @@ class _HomeViewState extends State<HomeView> {
             ListTile(
               leading: const Icon(Icons.notifications, color: Colors.white),
               title: const Text('Rappels', style: TextStyle(color: Colors.white)),
-              onTap: () => Navigator.pop(Rappels)
-              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const RappelView()));
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.label, color: Colors.white),
               title: const Text('Créer un label', style: TextStyle(color: Colors.white)),
@@ -272,6 +274,152 @@ class _HomeViewState extends State<HomeView> {
             onTap: _goToAddNote,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class RappelView extends StatelessWidget {
+  const RappelView({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black87,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        title: const Text('Rappels'),
+      ),
+      body: SizedBox(
+        width: double.infinity,
+        height: double.infinity,
+        child: Stack(
+          children: [
+            FutureBuilder<List<Note>>(
+              future: DatabaseService.getNotes(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Erreur: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
+                }
+                final notes = (snapshot.data ?? [])..sort((a, b) => b.date.compareTo(a.date));
+                if (notes.isEmpty) {
+                  return const Center(child: Text('Aucune note enregistrée', style: TextStyle(color: Colors.white)));
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 96),
+                  itemCount: notes.length,
+                  separatorBuilder: (_, __) => const Divider(color: Colors.white24),
+                  itemBuilder: (context, index) {
+                    final note = notes[index];
+                    final snippet = note.content.length > 120 ? '${note.content.substring(0, 120)}…' : note.content;
+                    return ListTile(
+                      title: Text(note.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      subtitle: Text(snippet, style: const TextStyle(color: Colors.white70)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.alarm_add, color: Colors.amber),
+                        onPressed: () async {
+                          final pickedDate = await showDatePicker(
+                            context: context,
+                            initialDate: DateTime.now(),
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                            builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(dialogBackgroundColor: Colors.black87), child: child!),
+                          );
+                          if (pickedDate == null) return;
+                          final pickedTime = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.now(),
+                            builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(timePickerTheme: TimePickerThemeData(hourMinuteTextColor: Colors.white)), child: child!),
+                          );
+                          if (pickedTime == null) return;
+                          final reminderDateTime = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Rappel ajouté pour "${note.title}" le ${reminderDateTime.toLocal()}')),
+                          );
+                          // TODO: Persister le rappel (ex: DatabaseService.saveReminder(...))
+                        },
+                      ),
+                      onTap: () {
+                        // optionnel: ouvrir la note
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => AddEditNoteView(note: note)));
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+            Positioned(
+              bottom: 16,
+              right: 16,
+              child: FloatingActionButton(
+                backgroundColor: Colors.amber,
+                child: const Icon(Icons.add, color: Colors.black),
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    backgroundColor: Colors.black87,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                    ),
+                    builder: (ctx) {
+                      return FutureBuilder<List<Note>>(
+                        future: DatabaseService.getNotes(),
+                        builder: (ctx2, snap) {
+                          if (snap.connectionState == ConnectionState.waiting) {
+                            return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+                          }
+                          final notes = (snap.data ?? [])..sort((a, b) => b.date.compareTo(a.date));
+                          if (notes.isEmpty) {
+                            return const SizedBox(height: 200, child: Center(child: Text('Aucune note disponible', style: TextStyle(color: Colors.white))));
+                          }
+                          return SizedBox(
+                            height: 400,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.all(8),
+                              itemCount: notes.length,
+                              separatorBuilder: (_, __) => const Divider(color: Colors.white24),
+                              itemBuilder: (ctx3, i) {
+                                final n = notes[i];
+                                return ListTile(
+                                  title: Text(n.title, style: const TextStyle(color: Colors.white)),
+                                  subtitle: Text(n.content, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70)),
+                                  onTap: () async {
+                                    Navigator.pop(ctx); // close sheet
+                                    final pickedDate = await showDatePicker(
+                                      context: context,
+                                      initialDate: DateTime.now(),
+                                      firstDate: DateTime.now(),
+                                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                                      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(dialogBackgroundColor: Colors.black87), child: child!),
+                                    );
+                                    if (pickedDate == null) return;
+                                    final pickedTime = await showTimePicker(
+                                      context: context,
+                                      initialTime: TimeOfDay.now(),
+                                    );
+                                    if (pickedTime == null) return;
+                                    final reminderDateTime = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Rappel ajouté pour "${n.title}" le ${reminderDateTime.toLocal()}')),
+                                    );
+                                    // TODO: Persister le rappel (ex: DatabaseService.saveReminder(...))
+                                  },
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

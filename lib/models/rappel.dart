@@ -2,8 +2,7 @@ class Rappels {
   final int? id;
   final String title;
   final DateTime dateTime;
-  final String? imagePath; // Ajout du champ image
-
+  final String? imagePath; 
   Rappels(this.id, {required this.title, required this.dateTime, this.imagePath});
 
   Map<String, dynamic> toMap() {
